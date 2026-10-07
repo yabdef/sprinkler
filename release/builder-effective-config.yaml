@@ -1,0 +1,28 @@
+directories:
+  output: release
+  buildResources: build
+extends: null
+appId: tr.sprinkler.tesisati
+productName: Sprinkler Tesisatı
+files:
+  - filter:
+      - build/**/*
+      - electron/**/*
+      - package.json
+      - '!node_modules/**/*'
+npmRebuild: false
+asar: true
+win:
+  target:
+    - nsis
+    - portable
+nsis:
+  artifactName: Sprinkler-Tesisati-${version}-${arch}-Kurulum.${ext}
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Sprinkler Tesisatı
+portable:
+  artifactName: Sprinkler-Tesisati-${version}-${arch}-Tasinabilir.${ext}
+electronVersion: 38.8.6

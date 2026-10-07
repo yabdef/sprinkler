@@ -1,70 +1,82 @@
-# Getting Started with Create React App
+# Sprinkler Tesisatı
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Windows'ta çevrimdışı çalışan, AutoCAD kullanım alışkanlıklarına yakın bir sprinkler çizim ve hidrolik hesap uygulamasıdır. Projeler bilgisayarda yerel olarak saklanır; MongoDB veya ayrı bir sunucu gerekmez.
 
-## Available Scripts
+> **Ön hesap kapsamı:** Hesap motoru BYKHY Ek-8 tasarım girdilerini, `Q = K√P`, Hazen–Williams sürtünme kaybını, statik kotu ve tesisat.org yazısındaki minimum debi adımlarını uygular. Yalnızca pompaya bağlı ağaç tipi ağlar desteklenir; loop/grid ağlar reddedilir. Çıktı nihai uygulama projesi, ruhsat veya mühendis onayı yerine kullanılamaz.
 
-In the project directory, you can run:
+Ayrıntılı standart karşılaştırması ve düzeltilmesi gereken hesap noktaları için [Mühendislik Doğrulama Raporu](docs/MUHENDISLIK-DOGRULAMA.md) okunmalıdır.
 
-### `npm start`
+## Annemin bilgisayarında çalıştırma
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+`release` klasöründeki dosyalardan biri yeterlidir:
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- `Sprinkler-Tesisati-...exe`: tek tıklamalı kurulumdur ve masaüstüne kısayol ekler.
+- Aynı sürümün `portable` dosyası: kurulum istemeden doğrudan açılır.
 
-### `npm test`
+Hedef bilgisayarda Node.js, MongoDB veya internet bağlantısı gerekmez. Projeler uygulama içinde otomatik kaydedilir. Bilgisayar değiştirirken üst çubuktaki **Yedekle** düğmesiyle `.sprinkler.json` dosyası alınmalı, yeni bilgisayarda **Proje Aç** ile içe aktarılmalıdır.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Temel kullanım
 
-### `npm run build`
+1. **Yeni Proje** ile tehlike sınıfını ve tasarım parametrelerini seçin.
+2. Şeritteki **Boru**, **Sprinkler** ve **Pompa** araçlarıyla çizimi oluşturun. Her araç, tıklamadan önce yerleşeceği konumu hayalet sembolle gösterir.
+3. Boruya veya elemana çift tıklayarak bilgilerini düzenleyin.
+4. **Ön Hesap** ile kritik operasyon alanını, boru bazında debi/basınç kaybı tablosunu ve pompa ön boyutlandırmasını görüntüleyin.
+5. Sonuç penceresindeki **Excel olarak indir** düğmesiyle renkli hesap föyünü `.xlsx` biçiminde kaydedin.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Proje ayarlarında yangın dolabı ve hidrant seçenekleri ayrı ayrı işaretlenir. İlave debiler yalnızca seçilen sistemler için hesaba katılır; bunların basınç görev noktaları ayrıca pompa eğrisi üzerinde doğrulanmalıdır.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+AutoCAD benzeri kontroller:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+| İşlem | Kısayol |
+| --- | --- |
+| Boru çiz | `L` veya `B` |
+| Sprinkler ekle | `S` |
+| Pompa ekle | `P` |
+| Seçim aracı | `V` |
+| Son komutu yinele | Çizim alanında sağ tık |
+| Nesne uçlarına yakala | `F3` |
+| Izgarayı aç/kapat | `F7` |
+| Dik çizimi aç/kapat | `F8` |
+| Geri al / yinele | `Ctrl+Z` / `Ctrl+Y` |
+| Kaydet | `Ctrl+S` |
+| İptal | `Esc` |
+| Seçili elemanı sil | `Delete` |
+| Yakınlaştır | Fare tekerleği |
+| Görünümü kaydır | Orta fare tuşu |
 
-### `npm run eject`
+Boru çizerken ilk tıklama başlangıç noktasını, ikinci tıklama bitiş noktasını belirler. Yeni boru parçası son uçtan devam eder; çizimi bitirmek için `Esc` kullanılır. Önizlemede uzunluk, açı ve yakalanan bağlantı noktası gösterilir.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Komut satırı ayrıca `BORU`, `SPRINKLER`, `POMPA`, `SİL`, `KAYDET` ve `HESAPLA` komutlarını kabul eder.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Geliştirme
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Gereksinim: güncel LTS Node.js.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```powershell
+npm install
+npm start
+```
 
-## Learn More
+Tarayıcı sürümü `http://localhost:3000` adresinde açılır. Masaüstü uygulamasını üretim derlemesiyle denemek için:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```powershell
+npm run desktop
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Windows EXE üretme
 
-### Code Splitting
+```powershell
+npm install
+npm run dist:win
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+Kurulum ve taşınabilir EXE dosyaları `release` klasörüne yazılır. Paketleme Windows üzerinde yapılmalıdır.
 
-### Analyzing the Bundle Size
+## Mimari
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+- React ve React Konva: arayüz ve çizim alanı
+- `localStorage`: yerel proje saklama
+- Electron: Windows masaüstü kabuğu
+- electron-builder: kurulum ve taşınabilir EXE üretimi
 
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+`backend` klasörü önceki MongoDB tabanlı denemeden kalmıştır; güncel uygulama akışında kullanılmaz.
