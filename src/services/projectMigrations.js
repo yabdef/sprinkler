@@ -6,6 +6,7 @@ const migratePipe = (element, pipeProfile) => {
   if (element.type !== 'pipe' || !Array.isArray(element.points)) return element;
   const planLength = Math.hypot(Number(element.points[2]) - Number(element.points[0]), Number(element.points[3]) - Number(element.points[1]));
   const oldHeight = Number(element.data?.height) || 0;
+  const legacyAbsoluteElevation = element.data?.elevationMode !== 'difference';
   return {
     ...element,
     data: {
@@ -14,8 +15,11 @@ const migratePipe = (element, pipeProfile) => {
       diameterMode: element.data?.diameterMode || (element.data?.diameter ? 'manual' : 'auto'),
       planLength: Number(element.data?.planLength) || planLength,
       length: Number(element.data?.length) > 0 ? Number(element.data.length) : planLength,
-      startElevation: Number(element.data?.startElevation) || 0,
-      endElevation: Number.isFinite(Number(element.data?.endElevation)) ? Number(element.data.endElevation) : oldHeight,
+      elevationMode: legacyAbsoluteElevation ? 'absolute' : 'difference',
+      ...(legacyAbsoluteElevation ? {
+        startElevation: Number(element.data?.startElevation) || 0,
+        endElevation: Number.isFinite(Number(element.data?.endElevation)) ? Number(element.data.endElevation) : oldHeight,
+      } : { height: Number(element.data?.height) || 0 }),
       equivalentLength: Number(element.data?.equivalentLength) || 0,
       fittings: element.data?.fittings || {},
     },

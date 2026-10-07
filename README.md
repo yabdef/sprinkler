@@ -20,12 +20,12 @@ Hedef bilgisayarda Node.js, MongoDB veya internet bağlantısı gerekmez. Projel
 1. **Yeni Proje** ile tehlike sınıfını ve tasarım parametrelerini seçin.
 2. Şeritteki **Boru**, **Sprinkler** ve **Pompa** araçlarıyla çizimi oluşturun. Her araç, tıklamadan önce yerleşeceği konumu hayalet sembolle gösterir.
 3. Boruya veya elemana çift tıklayarak bilgilerini düzenleyin.
-4. Proje ayarlarında gerçek boru iç çap profilini ve branşman yönünü seçin. Boru başlangıç/bitiş kotlarını mutlak kot olarak girin.
+4. Proje ayarlarında gerçek boru iç çap profilini ve branşman yönünü seçin. Boru düzenlerken çizim yönündeki kot farkını girin; pozitif değer yükselmeyi, negatif değer alçalmayı ifade eder.
 5. **Ön Hesap** ile geometrik kritik operasyon alanını, sprinkler düğüm sonuçlarını, boru kayıplarını ve ayrı pompa görev noktalarını görüntüleyin.
 6. Pompa elemanına çift tıklayıp anma, kapalı vana ve %150 debi eğri noktalarını girerek BYKHY pompa karakteristiğini kontrol edin.
 7. Sonuç penceresindeki **Excel olarak indir** düğmesiyle hesap föyü, sprinkler sonuçları, görev noktaları ve kontrol notlarını `.xlsx` olarak kaydedin.
 
-Proje ayarlarında yangın dolabı ve hidrant seçenekleri ayrı ayrı işaretlenir. Ek-8/C debileri su kaynağı ve depo hesabına katılır; her sistemin görev basıncı ayrı girilir ve pompa eğrisi üzerinde bağımsız doğrulanır. Toplam debi ile en yüksek basınç tek bir pompa noktası gibi birleştirilmez.
+Proje ayarlarında yangın dolabı ve hidrant seçenekleri ayrı ayrı işaretlenir. Ek-8/C debileri su kaynağı, depo ve toplam pompa güç ön hesabına katılır; görev basınçları ayrı girilir, toplam pompa görev basıncı bunların en yüksek değeriyle kontrol edilir.
 
 AutoCAD benzeri kontroller:
 

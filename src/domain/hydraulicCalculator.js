@@ -57,8 +57,10 @@ const validateAndBuildGraph = (project, pipeProfile) => {
     if (number(pipe.data?.length) <= 0) errors.push(`Boru ${pipe.id || index + 1} uzunluğu sıfırdan büyük olmalıdır.`);
     const a = getNode({ x: pipe.points[0], y: pipe.points[1] });
     const b = getNode({ x: pipe.points[2], y: pipe.points[3] });
-    assignElevation(a, pipe.data?.startElevation, `Boru ${pipe.id || index + 1} başlangıç`);
-    assignElevation(b, pipe.data?.endElevation, `Boru ${pipe.id || index + 1} bitiş`);
+    if (pipe.data?.elevationMode !== 'difference') {
+      assignElevation(a, pipe.data?.startElevation, `Boru ${pipe.id || index + 1} başlangıç`);
+      assignElevation(b, pipe.data?.endElevation, `Boru ${pipe.id || index + 1} bitiş`);
+    }
     const edge = { pipe, a, b, index };
     a.edges.push(edge);
     b.edges.push(edge);
@@ -129,7 +131,7 @@ const orientTree = (root) => {
       edge.parent = parent;
       edge.child = child;
       const parentIsStart = edge.a === parent;
-      if (isNumber(edge.pipe.data?.startElevation) && isNumber(edge.pipe.data?.endElevation)) {
+      if (edge.pipe.data?.elevationMode !== 'difference' && isNumber(edge.pipe.data?.startElevation) && isNumber(edge.pipe.data?.endElevation)) {
         const start = number(edge.pipe.data.startElevation);
         const end = number(edge.pipe.data.endElevation);
         edge.heightMetres = (parentIsStart ? end - start : start - end) / 100;
@@ -313,12 +315,13 @@ export const calculateProjectData = (project) => {
   if (dutyPoints.some((point) => point.key !== 'sprinkler' && point.pressure <= 0)) warnings.push('Yangın dolabı/hidrant görev basıncı girilmedi; ilave debi depo hesabına katıldı, pompa uygunluğu bu görev noktaları için doğrulanamadı.');
   const pumpSelection = buildPumpSelection(info, dutyPoints);
   if (pumpSelection.entered && pumpSelection.status !== 'Uygun') warnings.push('Girilen pompa eğrisi mevzuat karakteristiğini veya görev noktalarından en az birini karşılamıyor.');
-  const theoreticalPower = sprinklerFlow * solved.pumpPressure / 600;
+  const pumpDutyPressure = Math.max(solved.pumpPressure, ...dutyPoints.map((point) => number(point.pressure)));
+  const theoreticalPower = totalFlow * pumpDutyPressure / 600;
   const actualPower = theoreticalPower / efficiency;
   return {
     errors: [], projectName: project.name || 'Sprinkler Projesi', standard: design.standard.label, standardProfile: design.standard.id || DEFAULT_STANDARD_PROFILE, standardRevision: design.standard.revision, sourceUrl: design.standard.sourceUrl, calculationEngineVersion: CALCULATION_ENGINE_VERSION, scope: 'Ağaç tipi sprinkler ağı hidrolik ön hesabı', warnings: [...new Set(warnings)], activeSprinklers: activeSprinklers.map((sprinkler) => sprinkler.id), activePipeIds: rows.map((row) => row.pipeId), operationRectangle: critical.rectangle,
     criteria: { hazard: design.originalHazard, effectiveHazard: design.effectiveHazard, system: info.korumaAlani, material: pipeProfile.material, pipeSeries: pipeProfile.series, operationArea: design.area, density, coverage, maximumCoverage: design.limits.maximumCoverage, maximumSpacing: design.limits.maximumSpacing, branchDirection, targetCount, calculatedCount: activeSprinklers.length, kFactor, hazenWilliams: c, equivalentCorrectionFactor: getEquivalentLengthFactor(c), baseFlow, minimumPressure, cabinetIncluded: Boolean(info.yanginDolabiDahil), hydrantIncluded: Boolean(info.hidrantDahil), duration },
-    rows, sprinklerRows, dutyPoints, pumpSelection, sprinklerFlow, additionalFlow, waterSupplyFlow: totalFlow, waterSupplyFlowM3: totalFlow * 0.06, pompaDebisi: totalFlow, pompaDebisiM3: totalFlow * 0.06, pompaBasinci: solved.pumpPressure, teorikPompaGucu: theoreticalPower, gercekPompaGucu: actualPower, depoHacmi: totalFlow * duration / 1000,
+    rows, sprinklerRows, dutyPoints, pumpSelection, sprinklerFlow, additionalFlow, waterSupplyFlow: totalFlow, waterSupplyFlowM3: totalFlow * 0.06, pompaDebisi: totalFlow, pompaDebisiM3: totalFlow * 0.06, pompaBasinci: solved.pumpPressure, pompaGorevBasinci: pumpDutyPressure, teorikPompaGucu: theoreticalPower, gercekPompaGucu: actualPower, depoHacmi: totalFlow * duration / 1000,
   };
 };
 

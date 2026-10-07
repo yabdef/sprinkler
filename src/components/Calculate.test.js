@@ -108,3 +108,18 @@ test('Hazen–Williams kaybı debi ve uzunluk arttığında büyür', () => {
   expect(hazenWilliamsLoss({ ...base, flow: 120 })).toBeGreaterThan(hazenWilliamsLoss(base));
   expect(hazenWilliamsLoss({ ...base, length: 20 })).toBeCloseTo(hazenWilliamsLoss(base) * 2, 8);
 });
+
+test('yangÄ±n dolabÄ± ve hidrant debileri toplam pompa gÃ¼Ã§ Ã¶n hesabÄ±na girer', () => {
+  const result = calculateProjectData({
+    information: { ...information, yanginDolabiDahil: true, hidrantDahil: true, yanginDolabiGorevBasinci: 4, hidrantGorevBasinci: 7 },
+    elements: [
+      { type: 'pump', id: 'P', x: 0, y: 0 },
+      ...Array.from({ length: 6 }, (_, index) => pipe(index + 1, [index * 100, 0, (index + 1) * 100, 0])),
+      ...Array.from({ length: 6 }, (_, index) => ({ type: 'sprinkler', id: `S${index + 1}`, x: (index + 1) * 100, y: 0 })),
+    ],
+  });
+  expect(result.errors).toEqual([]);
+  expect(result.pompaDebisi).toBeCloseTo(result.sprinklerFlow + 500, 6);
+  expect(result.pompaGorevBasinci).toBeGreaterThanOrEqual(7);
+  expect(result.teorikPompaGucu).toBeCloseTo(result.pompaDebisi * result.pompaGorevBasinci / 600, 6);
+});

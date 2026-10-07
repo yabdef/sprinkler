@@ -69,7 +69,7 @@ Hazen-Williams denkleminde `L` metre, `Q` L/dk, `d` gerçek iç çap olarak mm, 
 3. Sprinkler asgari debisi `yoğunluk × gerçek koruma alanı` ile bulunur; sınıf basınç alt sınırı ile `(q/K)²` değerinin büyüğü uygulanır. Farklı bir standarda ait 49/68 L/dk tabanı bu profile karıştırılmaz.
 4. Yangın dolabı ve hidrant debileri yalnızca proje ayarlarında sisteme dahil edildiklerinde Ek-8/C su kaynağı/depo hesabına eklenir; görev basınçları ayrı tutulur.
 5. Pompaya bağlı olmayan devreler ile loop/grid ağlar açık hata ile reddedilir.
-6. Çelik ve PE100 PN16 gerçek iç çapları, C=120 tabanlı fitting eşdeğer uzunluğunun C düzeltme çarpanı, mutlak uç kotları ve Hazen-Williams C katsayısı boru kaybında kullanılır.
+6. Çelik ve PE100 PN16 gerçek iç çapları, C=120 tabanlı fitting eşdeğer uzunluğunun C düzeltme çarpanı, boru yönündeki kot farkı ve Hazen-Williams C katsayısı boru kaybında kullanılır. Eski mutlak uç kotlu projeler geriye dönük desteklenir.
 7. 6 m/s vana ve 10 m/s diğer boru hızı sınırları satır bazında raporlanır.
 8. Pompa eğrisi girildiğinde kapalı vana basıncının anma basıncının %140'ını aşmaması ve %150 debide basıncın anma basıncının %65'inden az olmaması denetlenir; görev noktaları eğri üzerinde ayrıca kontrol edilir.
 9. Ekran ve `.xlsx` çıktısı boru kayıplarını, sprinkler debi/basınçlarını, görev noktalarını, pompa kontrollerini, standart profilini ve hesap motoru sürümünü içerir.

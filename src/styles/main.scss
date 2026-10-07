@@ -632,7 +632,7 @@ select:focus-visible {
 }
 
 .inline-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.pipe-geometry-fields { grid-template-columns: repeat(5, 1fr); }
+.pipe-geometry-fields { grid-template-columns: 1.2fr 1fr 1fr 1fr; }
 .field-note { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .profile-error { padding: 8px; border-radius: 5px; color: #8f241d; background: #ffe2de; font-size: 12px; font-weight: 700; }
 .project-form-grid .inline-fields { grid-template-columns: repeat(2, 1fr); }
@@ -660,7 +660,16 @@ select:focus-visible {
 .fitting-section { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
 .fitting-section > div:first-child { display: flex; justify-content: space-between; margin-bottom: 14px; }
 .fitting-section span { color: var(--muted); font-size: 13px; }
-.fitting-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.fitting-grid { display: grid; grid-template-columns: repeat(6, minmax(82px, 1fr)); gap: 7px; }
+.fitting-card { position: relative; display: grid !important; grid-template-rows: 24px minmax(28px, auto) 30px; align-items: center; justify-items: center; gap: 2px !important; min-height: 82px; padding: 7px 5px; border: 1px solid #d5e0e5; border-radius: 7px; color: #526872 !important; background: #f7fafb; font-size: 10px !important; text-align: center; transition: border-color .15s, background .15s, transform .15s; }
+.fitting-card:hover { border-color: #6aa4bd; background: #edf7fa; transform: translateY(-1px); }
+.fitting-card > i { color: #16708e; font-size: 19px; }
+.fitting-card > span { display: block; line-height: 1.15; }
+.fitting-card input { width: 52px; height: 27px !important; padding: 0 5px !important; text-align: center; font-size: 12px; }
+.fitting-recommendation { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; padding: 9px 10px; border: 1px solid #ead79b; border-radius: 6px; color: #725716; background: #fff9df; font-size: 11px; line-height: 1.35; }
+.fitting-recommendation > i { color: #c28b00; font-size: 16px; }
+.fitting-recommendation > span { flex: 1; }
+.fitting-recommendation .secondary-button { flex: none; min-height: 29px; padding: 0 9px; font-size: 11px; }
 
 .cad-shell {
   display: grid;
