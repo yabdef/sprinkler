@@ -6,7 +6,16 @@ import PipeInfoPopup from './CadPipeDialog';
 import SprinklerInfoPopup from './SprinklerInfoPopup';
 import PumpInfoPopup from './PumpInfoPopup';
 import CalculationResultPopup from './CalculationResultPopup';
-import { calculateProjectData } from './Calculate';
+import { calculateProjectData } from '../domain/hydraulicCalculator';
+import { getPipeProfile } from '../domain/hydraulicStandards';
+import {
+  applyAutomaticPipeDiameters,
+  elementMatchesSelection,
+  elementSelectionKey,
+  findCadCommand,
+  getCommandSuggestions,
+  normalizeSelectionBox,
+} from '../domain/cadTools';
 import { exportProject, getProject, saveProject } from '../services/projectStore';
 
 const GRID = 50;
@@ -23,7 +32,8 @@ const CadWorkspace = () => {
   const [elements, setElements] = useState(() => (initial?.elements || []).map((item, index) => ({ ...item, id: item.id || index + 1 })));
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const [selectionBox, setSelectionBox] = useState(null);
   const [selectedTool, setSelectedTool] = useState('select');
   const [lastCommand, setLastCommand] = useState('pipe');
   const [startPoint, setStartPoint] = useState(null);
@@ -43,6 +53,11 @@ const CadWorkspace = () => {
   const [editPump, setEditPump] = useState(null);
   const [result, setResult] = useState(null);
   const [cursorPoint, setCursorPoint] = useState(null);
+  const pipeProfile = useMemo(() => getPipeProfile(project.information), [project.information]);
+  const commandSuggestions = useMemo(() => getCommandSuggestions(command), [command]);
+  const selectionRectangle = useMemo(() => selectionBox ? normalizeSelectionBox(selectionBox.start, selectionBox.current) : null, [selectionBox]);
+  const activeSprinklerIds = useMemo(() => new Set((result?.activeSprinklers || []).map(String)), [result]);
+  const activePipeIds = useMemo(() => new Set((result?.activePipeIds || []).map(String)), [result]);
 
   useEffect(() => {
     const node = containerRef.current;
@@ -55,18 +70,20 @@ const CadWorkspace = () => {
   }, []);
 
   const commit = useCallback((next) => {
+    const nextElements = typeof next === 'function' ? next(elements) : next;
     setHistory((items) => [...items.slice(-49), elements]);
     setFuture([]);
-    setElements(typeof next === 'function' ? next(elements) : next);
+    setElements(applyAutomaticPipeDiameters(nextElements, pipeProfile));
+    setResult(null);
     setDirty(true);
-  }, [elements]);
+  }, [elements, pipeProfile]);
 
   const undo = useCallback(() => {
     if (!history.length) return;
     const previous = history[history.length - 1];
     setFuture((items) => [elements, ...items]);
     setHistory((items) => items.slice(0, -1));
-    setElements(previous); setSelected(null); setDirty(true); setStatus('Son işlem geri alındı.');
+    setElements(previous); setSelectedKeys([]); setDirty(true); setStatus('Son işlem geri alındı.');
   }, [elements, history]);
 
   const redo = useCallback(() => {
@@ -74,7 +91,7 @@ const CadWorkspace = () => {
     const next = future[0];
     setHistory((items) => [...items, elements]);
     setFuture((items) => items.slice(1));
-    setElements(next); setSelected(null); setDirty(true); setStatus('İşlem yinelendi.');
+    setElements(next); setSelectedKeys([]); setDirty(true); setStatus('İşlem yinelendi.');
   }, [elements, future]);
 
   const currentProject = useCallback((extra = {}) => ({ ...project, elements, ...extra }), [elements, project]);
@@ -104,9 +121,9 @@ const CadWorkspace = () => {
   }, [currentProject, dirty]);
 
   const activateTool = useCallback((tool) => {
-    setSelectedTool(tool); setStartPoint(null); setPreviewPoint(null); setSelected(null);
+    setSelectedTool(tool); setStartPoint(null); setPreviewPoint(null); setSelectionBox(null); setSelectedKeys([]);
     if (tool !== 'select') setLastCommand(tool);
-    const labels = { select: 'Seçilecek nesneyi tıklayın.', pipe: 'Borunun başlangıç noktasını seçin.', sprinkler: 'Sprinkler konumunu seçin.', pump: 'Pompa konumunu seçin.' };
+    const labels = { select: 'Nesneye tıklayın veya boş alanda seçim penceresi çizin.', pipe: 'Borunun başlangıç noktasını seçin.', sprinkler: 'Sprinkler konumunu seçin.', pump: 'Pompa konumunu seçin.' };
     setStatus(labels[tool]);
   }, []);
 
@@ -141,8 +158,9 @@ const CadWorkspace = () => {
     if (event.evt.button === 1) { setPanning(true); event.target.getStage().draggable(true); return; }
     if (event.evt.button !== 0) return;
     if (selectedTool === 'select' && event.target !== event.target.getStage()) return;
-    const point = snapPoint(pointFromEvent(event), startPoint);
-    if (selectedTool === 'select') { setSelected(null); return; }
+    const rawPoint = pointFromEvent(event);
+    const point = snapPoint(rawPoint, startPoint);
+    if (selectedTool === 'select') { setSelectionBox({ start: rawPoint, current: rawPoint }); return; }
     if (selectedTool === 'sprinkler') {
       if (occupied(point)) { setStatus('Bu noktada zaten bir eleman var.'); return; }
       commit([...elements, { type: 'sprinkler', id: nextId('sprinkler'), x: point.x, y: point.y, data: {} }]);
@@ -158,21 +176,55 @@ const CadWorkspace = () => {
       if (point.x === startPoint.x && point.y === startPoint.y) { setStatus('Boru uzunluğu sıfır olamaz.'); return; }
       const duplicate = elements.some((item) => item.type === 'pipe' && ((item.points[0] === startPoint.x && item.points[1] === startPoint.y && item.points[2] === point.x && item.points[3] === point.y) || (item.points[2] === startPoint.x && item.points[3] === startPoint.y && item.points[0] === point.x && item.points[1] === point.y)));
       if (duplicate) { setStatus('Bu boru zaten çizilmiş.'); setStartPoint(null); return; }
-      commit([...elements, { type: 'pipe', id: nextId('pipe'), points: [startPoint.x, startPoint.y, point.x, point.y], data: { diameter: '1"', length: 0, height: 0 } }]);
+      const drawnLength = Math.hypot(point.x - startPoint.x, point.y - startPoint.y);
+      commit([...elements, { type: 'pipe', id: nextId('pipe'), points: [startPoint.x, startPoint.y, point.x, point.y], data: { diameter: Object.keys(pipeProfile.sizes)[0], diameterMode: 'auto', pipeProfile: pipeProfile.id, length: drawnLength, planLength: drawnLength, startElevation: 0, endElevation: 0, height: 0, equivalentLength: 0, fittings: {} } }]);
       setStartPoint(point); setPreviewPoint(point); setStatus('Boru eklendi. Sonraki bitiş noktasını seçin veya Esc ile bitirin.');
     }
   };
 
+  const handleStageMouseMove = (event) => {
+    const rawPoint = pointFromEvent(event);
+    if (selectionBox) setSelectionBox((box) => ({ ...box, current: rawPoint }));
+    const point = snapPoint(rawPoint, selectedTool === 'pipe' ? startPoint : null);
+    setCursorPoint(point);
+    if (selectedTool === 'pipe' && startPoint) setPreviewPoint(point);
+  };
+
+  const handleStageMouseUp = (event) => {
+    if (event.evt.button === 1) { setPanning(false); event.target.getStage().draggable(false); return; }
+    if (event.evt.button !== 0 || !selectionBox) return;
+    const box = normalizeSelectionBox(selectionBox.start, pointFromEvent(event));
+    setSelectionBox(null);
+    if (box.width < 4 / scale && box.height < 4 / scale) {
+      setSelectedKeys([]);
+      setStatus('Seçim temizlendi.');
+      return;
+    }
+    const matches = elements.filter((item) => elementMatchesSelection(item, box)).map(elementSelectionKey);
+    setSelectedKeys(matches);
+    setStatus(matches.length
+      ? `${matches.length} eleman ${box.crossing ? 'kesişen seçimle' : 'pencere seçimiyle'} seçildi. Delete ile silebilirsiniz.`
+      : 'Seçim penceresinde eleman bulunamadı.');
+  };
+
   const removeSelected = useCallback(() => {
-    if (!selected) return;
-    commit(elements.filter((item) => !(item.type === selected.type && item.id === selected.id)));
-    setSelected(null); setStatus('Seçili eleman silindi.');
-  }, [commit, elements, selected]);
+    if (!selectedKeys.length) return;
+    const keys = new Set(selectedKeys);
+    commit(elements.filter((item) => !keys.has(elementSelectionKey(item))));
+    setSelectedKeys([]); setStatus(`${selectedKeys.length} seçili eleman silindi.`);
+  }, [commit, elements, selectedKeys]);
 
   const selectElement = (event, item) => {
     if (selectedTool !== 'select') return;
-    event.cancelBubble = true; setSelected({ type: item.type, id: item.id });
-    setStatus(`${item.type === 'pipe' ? 'Boru' : item.type === 'sprinkler' ? 'Sprinkler' : 'Pompa'} seçildi. Delete ile silebilir, çift tıklayarak bilgilerini açabilirsiniz.`);
+    event.cancelBubble = true;
+    const key = elementSelectionKey(item);
+    if (event.evt.shiftKey || event.evt.ctrlKey || event.evt.metaKey) {
+      setSelectedKeys((keys) => keys.includes(key) ? keys.filter((value) => value !== key) : [...keys, key]);
+      setStatus('Çoklu seçim güncellendi. Delete ile seçili elemanları silebilirsiniz.');
+    } else {
+      setSelectedKeys([key]);
+      setStatus(`${item.type === 'pipe' ? 'Boru' : item.type === 'sprinkler' ? 'Sprinkler' : 'Pompa'} seçildi. Delete ile silebilir, çift tıklayarak bilgilerini açabilirsiniz.`);
+    }
   };
 
   const editElement = (event, item) => {
@@ -184,13 +236,12 @@ const CadWorkspace = () => {
   };
 
   const executeCommand = useCallback((value) => {
-    const normalized = value.trim().toLocaleUpperCase('tr-TR');
-    const map = { L: 'pipe', LINE: 'pipe', BORU: 'pipe', S: 'sprinkler', SPRINKLER: 'sprinkler', P: 'pump', POMPA: 'pump', V: 'select', SELECT: 'select', SEÇ: 'select' };
-    if (map[normalized]) activateTool(map[normalized]);
-    else if (['E', 'ERASE', 'SİL'].includes(normalized)) removeSelected();
-    else if (['SAVE', 'KAYDET'].includes(normalized)) persist();
-    else if (['CALC', 'HESAPLA'].includes(normalized)) { setResult(calculateProjectData(currentProject())); setStatus('Kritik devre ön hesabı ve hesap föyü hazırlandı.'); }
-    else if (normalized) setStatus(`“${value}” komutu bulunamadı.`);
+    const definition = findCadCommand(value);
+    if (definition?.tool) activateTool(definition.tool);
+    else if (definition?.action === 'erase') removeSelected();
+    else if (definition?.action === 'save') persist();
+    else if (definition?.action === 'calculate') { setResult(calculateProjectData(currentProject())); setStatus('Kritik devre ön hesabı ve hesap föyü hazırlandı.'); }
+    else if (value.trim()) setStatus(`“${value}” komutu bulunamadı.`);
     setCommand('');
   }, [activateTool, currentProject, persist, removeSelected]);
 
@@ -205,7 +256,7 @@ const CadWorkspace = () => {
       if (event.ctrlKey && event.key.toLowerCase() === 'z') { event.preventDefault(); undo(); return; }
       if (event.ctrlKey && event.key.toLowerCase() === 'y') { event.preventDefault(); redo(); return; }
       if (event.key === 'Delete') { removeSelected(); return; }
-      if (event.key === 'Escape') { setStartPoint(null); setPreviewPoint(null); setSelected(null); setStatus('Komut iptal edildi.'); return; }
+      if (event.key === 'Escape') { setStartPoint(null); setPreviewPoint(null); setSelectionBox(null); setSelectedKeys([]); setStatus('Komut iptal edildi.'); return; }
       const shortcuts = { l: 'pipe', b: 'pipe', s: 'sprinkler', p: 'pump', v: 'select' };
       if (shortcuts[event.key.toLowerCase()]) activateTool(shortcuts[event.key.toLowerCase()]);
     };
@@ -232,7 +283,7 @@ const CadWorkspace = () => {
     return lines;
   }, [scale, showGrid]);
 
-  const selectedMatch = (item) => selected?.type === item.type && selected.id === item.id;
+  const selectedMatch = (item) => selectedKeys.includes(elementSelectionKey(item));
   const previewOccupied = cursorPoint ? occupied(cursorPoint) : false;
   const previewInvalid = selectedTool === 'sprinkler'
     ? previewOccupied
@@ -244,7 +295,7 @@ const CadWorkspace = () => {
   const pipePreviewLength = startPoint && previewPoint ? Math.hypot(previewPoint.x - startPoint.x, previewPoint.y - startPoint.y) : 0;
   const pipePreviewAngle = startPoint && previewPoint ? Math.atan2(previewPoint.y - startPoint.y, previewPoint.x - startPoint.x) * 180 / Math.PI : 0;
   const savePipe = (data) => { commit(elements.map((item) => item.type === 'pipe' && item.id === editPipe.id ? { ...item, data } : item)); setEditPipe(null); };
-  const deleteBy = (type, idToDelete) => { commit(elements.filter((item) => !(item.type === type && item.id === idToDelete))); setEditPipe(null); setEditSprinkler(null); setEditPump(null); setSelected(null); };
+  const deleteBy = (type, idToDelete) => { commit(elements.filter((item) => !(item.type === type && item.id === idToDelete))); setEditPipe(null); setEditSprinkler(null); setEditPump(null); setSelectedKeys([]); };
   const savePumpProject = (updated) => { setProject(updated); saveProject({ ...updated, elements }); setEditPump(null); setDirty(false); };
 
   if (!initial) return <main className="missing-project"><h2>Proje bulunamadı</h2><button className="primary-button" onClick={() => navigate('/')}>Projelere dön</button></main>;
@@ -253,8 +304,9 @@ const CadWorkspace = () => {
     <CadToolbar selectedTool={selectedTool} onTool={activateTool} onHome={() => { persist(); navigate('/'); }} onUndo={undo} onRedo={redo} canUndo={history.length > 0} canRedo={future.length > 0} onSave={() => persist()} onExport={() => exportProject(persist())} onCalculate={() => { const calculation = calculateProjectData(currentProject()); setResult(calculation); persist({ calculations: calculation }); }} dirty={dirty} />
     <div className="drawing-tab"><span><i className="bi bi-file-earmark" /> {project.name}</span><small>{elements.filter((item) => item.type === 'pipe').length} boru · {elements.filter((item) => item.type === 'sprinkler').length} sprinkler</small></div>
     <div className={`canvas-wrap ${selectedTool !== 'select' ? 'drawing-mode' : ''}`} ref={containerRef} onContextMenu={(event) => { event.preventDefault(); activateTool(lastCommand); setStatus('Son komut yinelendi.'); }}>
-      <Stage width={size.width} height={size.height} x={stagePos.x} y={stagePos.y} scaleX={scale} scaleY={scale} draggable={panning} onDragEnd={(event) => { setStagePos(event.target.position()); setPanning(false); event.target.draggable(false); }} onMouseUp={(event) => { if (event.evt.button === 1) { setPanning(false); event.target.getStage().draggable(false); } }} onMouseDown={handleStageMouseDown} onMouseMove={(event) => { const point = snapPoint(pointFromEvent(event), selectedTool === 'pipe' ? startPoint : null); setCursorPoint(point); if (selectedTool === 'pipe' && startPoint) setPreviewPoint(point); }} onMouseLeave={() => setCursorPoint(null)} onWheel={handleWheel}>
+      <Stage width={size.width} height={size.height} x={stagePos.x} y={stagePos.y} scaleX={scale} scaleY={scale} draggable={panning} onDragEnd={(event) => { setStagePos(event.target.position()); setPanning(false); event.target.draggable(false); }} onMouseUp={handleStageMouseUp} onMouseDown={handleStageMouseDown} onMouseMove={handleStageMouseMove} onMouseLeave={() => setCursorPoint(null)} onWheel={handleWheel}>
         <Layer><Rect x={-2000} y={-2000} width={7000} height={7000} fill="#1c2a33" listening={false} />{gridLines}
+          {result?.operationRectangle && <Rect {...result.operationRectangle} fill="rgba(69, 224, 168, .08)" stroke="#45e0a8" strokeWidth={2 / scale} dash={[10 / scale, 6 / scale]} listening={false} />}
           {selectedTool === 'pipe' && startPoint && previewPoint && <React.Fragment>
             <Line points={[startPoint.x, startPoint.y, previewPoint.x, previewPoint.y]} stroke="rgba(88, 166, 255, .2)" strokeWidth={10 / scale} lineCap="round" listening={false} />
             <Line points={[startPoint.x, startPoint.y, previewPoint.x, previewPoint.y]} stroke="#f7d154" strokeWidth={2 / scale} dash={[9 / scale, 5 / scale]} lineCap="round" listening={false} />
@@ -265,9 +317,10 @@ const CadWorkspace = () => {
               <Text x={(startPoint.x + previewPoint.x) / 2 - 57 / scale} y={(startPoint.y + previewPoint.y) / 2 - 26 / scale} width={114 / scale} align="center" text={`${Math.round(pipePreviewLength)} cm  ·  ${Math.round(pipePreviewAngle)}°`} fill="#f5f8fa" fontSize={11 / scale} listening={false} />
             </React.Fragment>}
           </React.Fragment>}
-          {elements.filter((item) => item.type === 'pipe').map((item) => { const active = selectedMatch(item); const [x1, y1, x2, y2] = item.points; return <React.Fragment key={`pipe-${item.id}`}><Line points={item.points} stroke={active ? '#f7d154' : '#d5e1e7'} strokeWidth={(active ? 5 : 3) / scale} hitStrokeWidth={18 / scale} lineCap="round" onClick={(event) => selectElement(event, item)} onDblClick={(event) => editElement(event, item)} /><Text x={(x1 + x2) / 2 + 8} y={(y1 + y2) / 2 - 22} text={`${item.data?.diameter || 'Çap?'} · ${item.data?.length || 0} cm`} fill="#9fb4c0" fontSize={12 / scale} listening={false} /></React.Fragment>; })}
-          {elements.filter((item) => item.type === 'sprinkler').map((item) => <React.Fragment key={`sprinkler-${item.id}`}><Circle x={item.x} y={item.y} radius={9 / scale} fill={selectedMatch(item) ? '#f7d154' : '#58a6ff'} stroke="#dbeeff" strokeWidth={2 / scale} onClick={(event) => selectElement(event, item)} onDblClick={(event) => editElement(event, item)} /><Line points={[item.x - 14 / scale, item.y, item.x + 14 / scale, item.y]} stroke="#dbeeff" strokeWidth={2 / scale} listening={false} /><Text x={item.x + 13 / scale} y={item.y - 22 / scale} text={`SP-${item.id}`} fill="#b9cbd4" fontSize={12 / scale} listening={false} /></React.Fragment>)}
+          {elements.filter((item) => item.type === 'pipe').map((item) => { const selectedItem = selectedMatch(item); const critical = activePipeIds.has(String(item.id)); const [x1, y1, x2, y2] = item.points; return <React.Fragment key={`pipe-${item.id}`}><Line points={item.points} stroke={selectedItem ? '#f7d154' : critical ? '#45e0a8' : '#d5e1e7'} strokeWidth={(selectedItem || critical ? 5 : 3) / scale} hitStrokeWidth={18 / scale} lineCap="round" onClick={(event) => selectElement(event, item)} onDblClick={(event) => editElement(event, item)} /><Text x={(x1 + x2) / 2 + 8} y={(y1 + y2) / 2 - 22} text={`${item.data?.diameter || 'Çap?'}${item.data?.diameterMode === 'auto' ? ' · OTO' : ''} · ${Number(item.data?.length || 0).toFixed(0)} cm`} fill={critical ? '#8ff0ce' : '#9fb4c0'} fontSize={12 / scale} listening={false} /></React.Fragment>; })}
+          {elements.filter((item) => item.type === 'sprinkler').map((item) => { const critical = activeSprinklerIds.has(String(item.id)); return <React.Fragment key={`sprinkler-${item.id}`}><Circle x={item.x} y={item.y} radius={(critical ? 12 : 9) / scale} fill={selectedMatch(item) ? '#f7d154' : critical ? '#ff9f43' : '#58a6ff'} stroke={critical ? '#fff0d8' : '#dbeeff'} strokeWidth={2 / scale} onClick={(event) => selectElement(event, item)} onDblClick={(event) => editElement(event, item)} /><Line points={[item.x - 14 / scale, item.y, item.x + 14 / scale, item.y]} stroke="#dbeeff" strokeWidth={2 / scale} listening={false} /><Text x={item.x + 13 / scale} y={item.y - 22 / scale} text={`SP-${item.id}${critical ? ' · KRİTİK' : ''}`} fill={critical ? '#ffd19e' : '#b9cbd4'} fontSize={12 / scale} listening={false} /></React.Fragment>; })}
           {elements.filter((item) => item.type === 'pump').map((item) => <React.Fragment key={`pump-${item.id}`}><Circle x={item.x} y={item.y} radius={19 / scale} fill={selectedMatch(item) ? '#f7d154' : '#ec6b5f'} stroke="#ffe1dd" strokeWidth={2 / scale} onClick={(event) => selectElement(event, item)} onDblClick={(event) => editElement(event, item)} /><Text x={item.x - 8 / scale} y={item.y - 8 / scale} text="P" fill="#fff" fontStyle="bold" fontSize={16 / scale} listening={false} /><Text x={item.x + 25 / scale} y={item.y - 9 / scale} text="POMPA" fill="#b9cbd4" fontSize={12 / scale} listening={false} /></React.Fragment>)}
+          {selectionRectangle && (selectionRectangle.width > 0 || selectionRectangle.height > 0) && <Rect x={selectionRectangle.x} y={selectionRectangle.y} width={selectionRectangle.width} height={selectionRectangle.height} fill={selectionRectangle.crossing ? 'rgba(65, 190, 125, .16)' : 'rgba(68, 145, 230, .16)'} stroke={selectionRectangle.crossing ? '#64d69c' : '#6eb6ff'} strokeWidth={1 / scale} dash={selectionRectangle.crossing ? [7 / scale, 4 / scale] : undefined} listening={false} />}
           {selectedTool !== 'select' && cursorPoint && <React.Fragment>
             <Line points={[cursorPoint.x - 18 / scale, cursorPoint.y, cursorPoint.x + 18 / scale, cursorPoint.y]} stroke={previewInvalid ? '#ff7066' : '#8bc6ff'} strokeWidth={1 / scale} listening={false} />
             <Line points={[cursorPoint.x, cursorPoint.y - 18 / scale, cursorPoint.x, cursorPoint.y + 18 / scale]} stroke={previewInvalid ? '#ff7066' : '#8bc6ff'} strokeWidth={1 / scale} listening={false} />
@@ -290,16 +343,17 @@ const CadWorkspace = () => {
           </React.Fragment>}
         </Layer>
       </Stage>
-      {selectedTool !== 'select' && <div className="tool-guide" aria-live="polite">
+      <div className="tool-guide" aria-live="polite">
+        {selectedTool === 'select' && <><strong><i className="bi bi-bounding-box" /> Pencereyle seç</strong><small>Soldan sağa: yalnız tamamen içeride kalanlar. Sağdan sola: çerçeveyle kesişenler. Shift/Ctrl ile seçime ekleyin.</small></>}
         {selectedTool === 'pipe' && <><strong><i className="bi bi-slash-lg" /> Boru çiz</strong><div className="guide-steps"><span className={!startPoint ? 'current' : 'done'}><b>1</b> Başlangıca tıkla</span><span className={startPoint ? 'current' : ''}><b>2</b> Bitişe tıkla</span></div><small>Yeni parçalar uçtan devam eder. Bitirmek için Esc.</small></>}
         {selectedTool === 'sprinkler' && <><strong><i className="bi bi-bullseye" /> Sprinkler yerleştir</strong><small>Hayalet sembolü istediğiniz noktaya getirip tıklayın.</small></>}
         {selectedTool === 'pump' && <><strong><i className="bi bi-gear-wide-connected" /> Pompa yerleştir</strong><small>Pompayı bir boru ucuna yaklaştırıp tıklayın.</small></>}
-      </div>}
+      </div>
       <div className="view-controls"><button onClick={() => { setScale(1); setStagePos({ x: 0, y: 0 }); }} title="Görünümü sıfırla"><i className="bi bi-house" /></button><span>%{Math.round(scale * 100)}</span></div>
     </div>
-    <div className="command-area"><div className="command-message"><span>Komut:</span> {status}</div><div className="command-input"><span>&gt;</span><input ref={commandRef} value={command} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') executeCommand(command); }} placeholder="Komut yazın (BORU, SPRINKLER, POMPA, SİL, HESAPLA)" /></div></div>
+    <div className="command-area">{command && commandSuggestions.length > 0 && <div className="command-suggestions" role="listbox">{commandSuggestions.map((suggestion, index) => <button type="button" key={suggestion.name} className={index === 0 ? 'active' : ''} onMouseDown={(event) => event.preventDefault()} onClick={() => { setCommand(suggestion.name); commandRef.current?.focus(); }}><strong>{suggestion.name}</strong><span>{suggestion.description}</span>{index === 0 && <kbd>Tab</kbd>}</button>)}</div>}<div className="command-message"><span>Komut:</span> {status}</div><div className="command-input"><span>&gt;</span><input ref={commandRef} value={command} onChange={(event) => setCommand(event.target.value)} onKeyDown={(event) => { if (event.key === 'Tab' && commandSuggestions[0]) { event.preventDefault(); setCommand(commandSuggestions[0].name); } else if (event.key === 'Enter') executeCommand(command); else if (event.key === 'Escape') setCommand(''); }} placeholder="Komut yazın; tamamlamak için Tab'a basın" aria-label="Komut" /></div></div>
     <footer className="cad-status"><span>X: {Math.round(cursorPoint?.x || 0)} cm&nbsp;&nbsp; Y: {Math.round(cursorPoint?.y || 0)} cm&nbsp;&nbsp; Izgara: {GRID} cm</span><div><button className={showGrid ? 'on' : ''} onClick={() => setShowGrid(!showGrid)}>F7 IZGARA</button><button className={ortho ? 'on' : ''} onClick={() => setOrtho(!ortho)}>F8 DİK</button><button className={osnap ? 'on' : ''} onClick={() => setOsnap(!osnap)}>F3 YAKALA</button></div></footer>
-    {editPipe && <PipeInfoPopup line={editPipe} onClose={() => setEditPipe(null)} onSave={savePipe} onDelete={() => deleteBy('pipe', editPipe.id)} />}
+    {editPipe && <PipeInfoPopup line={editPipe} pipeProfileId={pipeProfile.id} onClose={() => setEditPipe(null)} onSave={savePipe} onDelete={() => deleteBy('pipe', editPipe.id)} />}
     {editSprinkler && <SprinklerInfoPopup sprinkler={editSprinkler} onClose={() => setEditSprinkler(null)} onDelete={(value) => deleteBy('sprinkler', value)} />}
     {editPump && <PumpInfoPopup project={{ ...project, elements }} onClose={() => setEditPump(null)} onDelete={() => deleteBy('pump', editPump.id)} onSave={savePumpProject} />}
     {result && <CalculationResultPopup result={result} onClose={() => setResult(null)} />}

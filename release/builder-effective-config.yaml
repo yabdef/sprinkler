@@ -25,4 +25,4 @@ nsis:
   shortcutName: Sprinkler Tesisatı
 portable:
   artifactName: Sprinkler-Tesisati-${version}-${arch}-Tasinabilir.${ext}
-electronVersion: 38.8.6
+electronVersion: 44.7.0

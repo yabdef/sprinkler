@@ -2,7 +2,7 @@
 
 Windows'ta çevrimdışı çalışan, AutoCAD kullanım alışkanlıklarına yakın bir sprinkler çizim ve hidrolik hesap uygulamasıdır. Projeler bilgisayarda yerel olarak saklanır; MongoDB veya ayrı bir sunucu gerekmez.
 
-> **Ön hesap kapsamı:** Hesap motoru BYKHY Ek-8 tasarım girdilerini, `Q = K√P`, Hazen–Williams sürtünme kaybını, statik kotu ve tesisat.org yazısındaki minimum debi adımlarını uygular. Yalnızca pompaya bağlı ağaç tipi ağlar desteklenir; loop/grid ağlar reddedilir. Çıktı nihai uygulama projesi, ruhsat veya mühendis onayı yerine kullanılamaz.
+> **Hesap kapsamı:** Hesap motoru BYKHY Ek-8/B ve Ek-8/C girdilerini, `Q = K√P`, Hazen–Williams sürtünme kaybını, mutlak kotları ve TS EN 12845 temelli basınç alt sınırlarını uygular. Kuru düşük tehlike OH1'e, kuru OH4 yüksek tehlike 1'e geçirilir. Operasyon alanı branşman yönünde geometrik olarak kurulur; eksik alan, fazla kapsama, kopuk ağ ve loop/grid ağlarda sonuç üretilmez. Yüksek tehlike, depolama, raf içi, ESFR ve CMSA sistemleri uzman hesabına yönlendirilir.
 
 Ayrıntılı standart karşılaştırması ve düzeltilmesi gereken hesap noktaları için [Mühendislik Doğrulama Raporu](docs/MUHENDISLIK-DOGRULAMA.md) okunmalıdır.
 
@@ -20,10 +20,12 @@ Hedef bilgisayarda Node.js, MongoDB veya internet bağlantısı gerekmez. Projel
 1. **Yeni Proje** ile tehlike sınıfını ve tasarım parametrelerini seçin.
 2. Şeritteki **Boru**, **Sprinkler** ve **Pompa** araçlarıyla çizimi oluşturun. Her araç, tıklamadan önce yerleşeceği konumu hayalet sembolle gösterir.
 3. Boruya veya elemana çift tıklayarak bilgilerini düzenleyin.
-4. **Ön Hesap** ile kritik operasyon alanını, boru bazında debi/basınç kaybı tablosunu ve pompa ön boyutlandırmasını görüntüleyin.
-5. Sonuç penceresindeki **Excel olarak indir** düğmesiyle renkli hesap föyünü `.xlsx` biçiminde kaydedin.
+4. Proje ayarlarında gerçek boru iç çap profilini ve branşman yönünü seçin. Boru başlangıç/bitiş kotlarını mutlak kot olarak girin.
+5. **Ön Hesap** ile geometrik kritik operasyon alanını, sprinkler düğüm sonuçlarını, boru kayıplarını ve ayrı pompa görev noktalarını görüntüleyin.
+6. Pompa elemanına çift tıklayıp anma, kapalı vana ve %150 debi eğri noktalarını girerek BYKHY pompa karakteristiğini kontrol edin.
+7. Sonuç penceresindeki **Excel olarak indir** düğmesiyle hesap föyü, sprinkler sonuçları, görev noktaları ve kontrol notlarını `.xlsx` olarak kaydedin.
 
-Proje ayarlarında yangın dolabı ve hidrant seçenekleri ayrı ayrı işaretlenir. İlave debiler yalnızca seçilen sistemler için hesaba katılır; bunların basınç görev noktaları ayrıca pompa eğrisi üzerinde doğrulanmalıdır.
+Proje ayarlarında yangın dolabı ve hidrant seçenekleri ayrı ayrı işaretlenir. Ek-8/C debileri su kaynağı ve depo hesabına katılır; her sistemin görev basıncı ayrı girilir ve pompa eğrisi üzerinde bağımsız doğrulanır. Toplam debi ile en yüksek basınç tek bir pompa noktası gibi birleştirilmez.
 
 AutoCAD benzeri kontroller:
 
@@ -50,14 +52,14 @@ Komut satırı ayrıca `BORU`, `SPRINKLER`, `POMPA`, `SİL`, `KAYDET` ve `HESAPL
 
 ## Geliştirme
 
-Gereksinim: güncel LTS Node.js.
+Gereksinim: Node.js 20.19 veya daha yeni bir LTS sürümü.
 
 ```powershell
 npm install
 npm start
 ```
 
-Tarayıcı sürümü `http://localhost:3000` adresinde açılır. Masaüstü uygulamasını üretim derlemesiyle denemek için:
+Vite geliştirme adresi terminalde gösterilir; varsayılan adres `http://localhost:5173` olur. Masaüstü uygulamasını üretim derlemesiyle denemek için:
 
 ```powershell
 npm run desktop
@@ -74,9 +76,10 @@ Kurulum ve taşınabilir EXE dosyaları `release` klasörüne yazılır. Paketle
 
 ## Mimari
 
-- React ve React Konva: arayüz ve çizim alanı
-- `localStorage`: yerel proje saklama
+- React, Vite ve React Konva: arayüz, derleme ve çizim alanı
+- Sürümlü `localStorage`: yerel proje saklama, son beş değişikliğin otomatik yedeği ve eski proje göçü
 - Electron: Windows masaüstü kabuğu
 - electron-builder: kurulum ve taşınabilir EXE üretimi
+- ExcelJS: dört sayfalı hidrolik hesap çalışma kitabı
 
-`backend` klasörü önceki MongoDB tabanlı denemeden kalmıştır; güncel uygulama akışında kullanılmaz.
+Resmî profil kaynağı: [ÇŞİDB Binaların Yangından Korunması Hakkında Yönetmelik Kılavuzu](https://webdosya.csb.gov.tr/v2/meslekihizmetler/2026/05/Binalar-n-Yang-n-Korunmas-Hakk-nda-Y-netmelik-K-lavuzu-20260507112134.pdf). TS EN 12845'in projede geçerli baskısı ve yerel idare kabulleri yetkili mühendis tarafından ayrıca doğrulanmalıdır.
